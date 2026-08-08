@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "travel-story"
+version = "0.1.0"
+description = "A small writer's tool for photographic travel stories"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "Markdown>=3.5",
+  "Pillow>=10.0",
+]
+
+[project.scripts]
+story = "story.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["story*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
