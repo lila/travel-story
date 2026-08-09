@@ -11,6 +11,7 @@ requires-python = ">=3.10"
 dependencies = [
   "Markdown>=3.5",
   "Pillow>=10.0",
+  "tomli>=2.0; python_version < '3.11'",
 ]
 
 [project.scripts]
@@ -21,4 +22,3 @@ include = ["story*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-

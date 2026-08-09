@@ -12,18 +12,11 @@ It is deliberately not a CMS, photo organizer, or editor.
 Travel Story takes inspiration from [Philip Greenspun's travel
 writing](https://philip.greenspun.com/travel/), especially [*Travels with
 Samantha*](https://philip.greenspun.com/samantha/), and from the early
-photo.net and ArsDigita tradition of using straightforward software to publish
+photo.net tradition of using straightforward software to publish
 carefully authored material. The aim is not to reproduce the old site or its
 Oracle-and-Tcl stack. It is to preserve something valuable in its approach:
 prose and photographs belong to the same narrative, and the machinery should
 remain behind the work.
-
-The [ArsDigita Community
-System](https://philip.greenspun.com/wtr/using-the-acs.html) grew out of the
-software behind photo.net. Its surviving documentation even uses travel areas
-as examples of durable content sections. Travel Story is much smaller and is
-not a community system, but it shares the preference for understandable tools,
-plain structure, and content that remains useful after the software changes.
 
 These principles guide the project:
 
@@ -77,6 +70,13 @@ You can also run or build the tool without entering the development shell:
 ```sh
 nix run . -- --help
 nix build
+```
+
+Once the repository is published, install the command into your Nix profile to
+use it from a writing directory without entering the software repository:
+
+```sh
+nix profile install github:lila/travel-story
 ```
 
 [ExifTool](https://exiftool.org/) is optional but recommended, especially for
@@ -172,6 +172,85 @@ showing its stable photo ID and available camera, lens, exposure, capture-time,
 and dimension metadata. Captions remain part of their story placement; they are
 not repeated as permanent photo metadata. Local file paths, camera originals,
 and GPS coordinates are never published.
+
+### Build the complete site
+
+Keep the software repository separate from the writing publication. A typical
+publication lives at `~/karans-stories` and gives each trip its own photo
+catalog:
+
+```text
+~/karans-stories/
+  site.toml
+  yellowstone/
+    .story/
+      catalog.sqlite3
+      cache/
+    prologue.story
+    yellowstone.story
+  san-diego/
+    .story/
+      catalog.sqlite3
+      cache/
+    beaches.story
+```
+
+The top-level `site.toml` describes the homepage and the order of its source
+stories:
+
+```toml
+title = "The Karan Family Travels"
+description = "Photographic stories from the road."
+output = "public"
+
+stories = [
+  "yellowstone/prologue.story",
+  "yellowstone/yellowstone.story",
+]
+```
+
+Build every listed story and the table-of-contents homepage with:
+
+```sh
+story site build
+```
+
+`story site build` searches the current directory and its parents for the
+nearest `site.toml`. It can therefore be run from `~/karans-stories` or from a
+trip directory beneath it. From elsewhere, specify the file explicitly:
+
+```sh
+story site build --config ~/karans-stories/site.toml
+```
+
+The complete site is replaced as one build, so an error cannot leave a mixture
+of old and new pages. The result has ordinary static files and directories:
+
+```text
+public/
+  index.html
+  style.css
+  yellowstone/
+    prologue/
+      index.html
+      images/
+      photos/
+    yellowstone/
+      index.html
+      images/
+      photos/
+```
+
+The story's relative source path supplies its URL: `yellowstone/prologue.story`
+becomes `public/yellowstone/prologue/`. Its front matter supplies the title,
+subtitle, and date shown on the homepage. The homepage groups stories by their
+source directory, so both Yellowstone stories appear together under a
+“Yellowstone” collection heading.
+The source directories retain their `.story` files and local photo catalogs;
+all generated publication artifacts go only into the top-level `public/`.
+During a complete build, each story uses the nearest `.story` catalog above its
+source file. Yellowstone and San Diego therefore remain independent photo
+libraries even though one `site.toml` publishes them together.
 
 ### Check and maintain a story
 

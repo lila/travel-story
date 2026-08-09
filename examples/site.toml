@@ -1,0 +1,9 @@
+title = "Family Travels"
+description = "Photographic stories from the road."
+output = "public"
+
+stories = [
+  "yellowstone/prologue.story",
+  "yellowstone/yellowstone.story",
+  "san-diego/beaches.story",
+]

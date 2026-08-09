@@ -14,6 +14,7 @@ from .photos import (
 from .project import find_root, init_project
 from .render import build_story
 from .server import serve_photos, serve_preview
+from .site import build_site, find_site_config
 from .validate import check_story
 
 
@@ -44,6 +45,10 @@ def parser() -> argparse.ArgumentParser:
     build = commands.add_parser("build", help="build a static story")
     build.add_argument("file", type=Path)
     build.add_argument("--output", type=Path)
+
+    site = commands.add_parser("site", help="build the complete static site")
+    site.add_argument("action", nargs="?", choices=["build"], default="build")
+    site.add_argument("--config", type=Path, help="site configuration (default: site.toml)")
 
     check = commands.add_parser("check", help="validate a .story file before publishing")
     check.add_argument("file", type=Path)
@@ -110,6 +115,11 @@ def run(args: argparse.Namespace) -> int:
         root = find_root(args.file)
         output = build_story(root, args.file.resolve(), args.output.resolve() if args.output else None)
         print(f"Built {output / 'index.html'}")
+        return 0
+    if args.command == "site":
+        config = args.config.resolve() if args.config else find_site_config()
+        output, count = build_site(config.parent, config)
+        print(f"Built {count} stories and {output / 'index.html'}")
         return 0
     if args.command == "check":
         root = find_root(args.file)

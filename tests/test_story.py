@@ -12,6 +12,7 @@ from story.photos import (
 )
 from story.project import init_project
 from story.render import STYLE, build_story
+from story.site import build_site, find_site_config, load_site_config
 from story.validate import check_story
 
 
@@ -152,3 +153,97 @@ def test_apple_album_resolves_original_paths(tmp_path: Path, monkeypatch):
     paths, unavailable = photos_in_apple_album("Yellowstone")
     assert paths == [original]
     assert unavailable == 1
+
+
+def test_site_build_creates_index_and_story_directories(tmp_path: Path):
+    root = tmp_path
+    init_project(root)
+    (root / "first.story").write_text(
+        "---\ntitle: First Journey\nsubtitle: Into the hills\ndate: May 2026\n---\n\nHello.\n",
+        encoding="utf-8",
+    )
+    (root / "second.story").write_text(
+        "---\ntitle: Second Journey\n---\n\nGoodbye.\n", encoding="utf-8"
+    )
+    (root / "site.toml").write_text(
+        'title = "Family Travels"\n'
+        'description = "Stories from the road."\n'
+        'stories = ["first.story", "second.story"]\n',
+        encoding="utf-8",
+    )
+
+    output, count = build_site(root)
+    assert count == 2
+    index = (output / "index.html").read_text()
+    assert "Family Travels" in index
+    assert "Stories from the road." in index
+    assert '<a href="first/">' in index
+    assert "Into the hills" in index
+    assert (output / "first" / "index.html").exists()
+    assert (output / "second" / "index.html").exists()
+    assert 'href="../">← All stories</a>' in (output / "first" / "index.html").read_text()
+
+
+def test_site_config_rejects_duplicate_story_urls(tmp_path: Path):
+    init_project(tmp_path)
+    (tmp_path / "one").mkdir()
+    (tmp_path / "one" / "trip.story").write_text("One")
+    (tmp_path / "site.toml").write_text(
+        'title = "Trips"\nstories = ["one/trip.story", "one/trip.story"]\n'
+    )
+    try:
+        load_site_config(tmp_path)
+    except RuntimeError as error:
+        assert "same URL" in str(error)
+    else:
+        raise AssertionError("duplicate story slugs should fail")
+
+
+def test_site_uses_catalog_nearest_each_story_and_top_level_output(tmp_path: Path):
+    source = tmp_path / "trip"
+    source.mkdir()
+    init_project(source)
+    (source / "chapter.story").write_text("---\ntitle: Chapter\n---\n\nWords.\n")
+    config = tmp_path / "site.toml"
+    config.write_text('title = "Travels"\nstories = ["trip/chapter.story"]\n')
+
+    assert find_site_config(source) == config
+    output, count = build_site(tmp_path, config)
+    assert count == 1
+    assert output == tmp_path / "public"
+    assert (tmp_path / "public" / "trip" / "chapter" / "index.html").exists()
+    page = (tmp_path / "public" / "trip" / "chapter" / "index.html").read_text()
+    assert 'href="../../">← All stories</a>' in page
+    index = (tmp_path / "public" / "index.html").read_text()
+    assert 'href="trip/chapter/"' in index
+    assert '<section class="collection"><h2>Trip</h2>' in index
+    assert not (source / "public").exists()
+
+
+def test_site_builds_trips_from_independent_photo_catalogs(tmp_path: Path):
+    story_lines = []
+    for trip, color in (("yellowstone", "#8c7654"), ("san-diego", "#4f83a3")):
+        source = tmp_path / trip
+        originals = tmp_path / f"{trip}-originals"
+        source.mkdir()
+        originals.mkdir()
+        photo = originals / f"{trip}.jpg"
+        Image.new("RGB", (300, 200), color).save(photo)
+        init_project(source)
+        add_photos(source, originals)
+        photo_id = search_photos(source, trip)[0]["id"]
+        story_path = source / "journal.story"
+        story_path.write_text(
+            f"---\ntitle: {trip.title()}\n---\n\n@photo {photo_id}\n",
+            encoding="utf-8",
+        )
+        story_lines.append(f'  "{trip}/journal.story",')
+
+    (tmp_path / "site.toml").write_text(
+        'title = "Travels"\nstories = [\n' + "\n".join(story_lines) + "\n]\n",
+        encoding="utf-8",
+    )
+    output, count = build_site(tmp_path)
+    assert count == 2
+    assert (output / "yellowstone" / "journal" / "images").is_dir()
+    assert (output / "san-diego" / "journal" / "images").is_dir()

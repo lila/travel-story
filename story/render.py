@@ -27,6 +27,7 @@ figure { margin:3.5em 0 } figure img { display:block; width:100%; height:auto; b
 .photos.full { width:min(96vw,1400px); margin-left:50%; transform:translateX(-50%) } .missing { border:1px solid var(--rule); padding:2em; color:#9b3c31 }
 .photo-detail { max-width:1200px } .photo-detail>img { display:block; width:100%; height:auto }
 .metadata { max-width:760px; display:grid; grid-template-columns:max-content 1fr; gap:.35rem 1.5rem; border-top:1px solid var(--rule); padding-top:1.5rem; margin-top:2.5rem; font-size:.92rem } .metadata dt { color:var(--muted) } .metadata dd { margin:0 } .back { display:inline-block; margin-bottom:1.5rem; font-size:.92rem }
+.site-nav { max-width:640px; margin:0 auto 2.5rem; font-size:.88rem }
 @media(max-width:700px) { body { font-size:17px } main { margin-top:40px; padding:0 18px } header { padding-bottom:1.75rem; margin-bottom:2.5rem } .photos.pair { margin-left:0; margin-right:0; grid-template-columns:1fr } .photos.large,.photos.full { width:calc(100vw - 24px) } .metadata { grid-template-columns:1fr; gap:.1rem } .metadata dd { margin-bottom:.65rem } }
 """
 
@@ -55,6 +56,7 @@ def render_story(
     image_url: Callable[[Any], str],
     photo_page_url: Callable[[Any], str] | None = None,
     live: bool = False,
+    home_url: str | None = None,
 ) -> str:
     title = story.metadata.get("title", "Untitled story")
     body: list[str] = []
@@ -91,7 +93,8 @@ def render_story(
     date = story.metadata.get("date")
     live_script = """
 <script>let v='';setInterval(async()=>{try{let n=await(await fetch('/__version',{cache:'no-store'})).text();if(v&&n!==v)location.reload();v=n}catch(e){}},700)</script>""" if live else ""
-    return f"""<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{html.escape(title)}</title><link rel="stylesheet" href="style.css"></head><body><main><header><h1>{html.escape(title)}</h1>{f'<p class="deck">{html.escape(subtitle)}</p>' if subtitle else ''}{f'<p class="date">{html.escape(date)}</p>' if date else ''}</header>{''.join(body)}</main>{live_script}</body></html>"""
+    navigation = f'<nav class="site-nav"><a href="{html.escape(home_url)}">← All stories</a></nav>' if home_url else ""
+    return f"""<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{html.escape(title)}</title><link rel="stylesheet" href="style.css"></head><body><main>{navigation}<header><h1>{html.escape(title)}</h1>{f'<p class="deck">{html.escape(subtitle)}</p>' if subtitle else ''}{f'<p class="date">{html.escape(date)}</p>' if date else ''}</header>{''.join(body)}</main>{live_script}</body></html>"""
 
 
 def _exposure(value: Any) -> str | None:
@@ -142,7 +145,12 @@ def render_photo_page(
     return f"""<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{html.escape(title)}</title><link rel="stylesheet" href="{html.escape(stylesheet_url)}"></head><body><main class="photo-detail"><a class="back" href="{html.escape(back_url)}">← Back to {html.escape(story_title)}</a><img src="{html.escape(image_url)}" alt="{html.escape(alt)}"><dl class="metadata">{metadata}</dl></main></body></html>"""
 
 
-def build_story(root: Path, story_path: Path, output_base: Path | None = None) -> Path:
+def build_story(
+    root: Path,
+    story_path: Path,
+    output_base: Path | None = None,
+    home_url: str | None = None,
+) -> Path:
     from .parser import parse_story
     story = parse_story(story_path)
     photos = get_photos(root, story.photo_ids)
@@ -163,7 +171,13 @@ def build_story(root: Path, story_path: Path, output_base: Path | None = None) -
         shutil.copy2(cached, images / name)
         return f"images/{name}"
 
-    page = render_story(story, photos, copy_image, lambda photo: f"photos/{photo['id']}/")
+    page = render_story(
+        story,
+        photos,
+        copy_image,
+        lambda photo: f"photos/{photo['id']}/",
+        home_url=home_url,
+    )
     (output / "index.html").write_text(page, encoding="utf-8")
     (output / "style.css").write_text(STYLE, encoding="utf-8")
 
