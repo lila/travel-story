@@ -3,6 +3,7 @@ from pathlib import Path
 from PIL import Image
 
 from story.parser import parse_story
+from story.cli import parser as cli_parser, run as run_cli
 from story.photos import (
     add_photos,
     photos_in_apple_album,
@@ -247,3 +248,21 @@ def test_site_builds_trips_from_independent_photo_catalogs(tmp_path: Path):
     assert count == 2
     assert (output / "yellowstone" / "journal" / "images").is_dir()
     assert (output / "san-diego" / "journal" / "images").is_dir()
+
+
+def test_single_build_preserves_story_path_within_site(tmp_path: Path, monkeypatch):
+    source = tmp_path / "san-diego"
+    source.mkdir()
+    init_project(source)
+    story_file = source / "trip1.story"
+    story_file.write_text("---\ntitle: San Diego\n---\n\nAt the coast.\n")
+    (tmp_path / "site.toml").write_text(
+        'title = "Travels"\nstories = ["san-diego/trip1.story"]\n'
+    )
+    monkeypatch.chdir(source)
+
+    assert run_cli(cli_parser().parse_args(["build", "trip1.story"])) == 0
+    page = tmp_path / "public" / "san-diego" / "trip1" / "index.html"
+    assert page.exists()
+    assert not (source / "public").exists()
+    assert 'href="../../">← All stories</a>' in page.read_text()

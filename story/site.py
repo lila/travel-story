@@ -162,3 +162,19 @@ def build_site(root: Path, config_path: Path | None = None) -> tuple[Path, int]:
             shutil.rmtree(stage)
         raise
     return config.output, len(parsed)
+
+
+def build_site_story(config_path: Path, story_path: Path) -> Path:
+    """Build one story into its path within an existing publication."""
+    site_root = config_path.resolve().parent
+    config = load_site_config(site_root, config_path)
+    story_path = _inside(site_root, story_path, "Story file")
+    relative_url = _story_url(site_root, story_path)
+    output_base = config.output / relative_url.parent
+    home_url = "../" * len(relative_url.parts)
+    return build_story(
+        find_root(story_path),
+        story_path,
+        output_base,
+        home_url=home_url,
+    )

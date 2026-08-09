@@ -14,7 +14,7 @@ from .photos import (
 from .project import find_root, init_project
 from .render import build_story
 from .server import serve_photos, serve_preview
-from .site import build_site, find_site_config
+from .site import build_site, build_site_story, find_site_config
 from .validate import check_story
 
 
@@ -113,7 +113,16 @@ def run(args: argparse.Namespace) -> int:
         return 0
     if args.command == "build":
         root = find_root(args.file)
-        output = build_story(root, args.file.resolve(), args.output.resolve() if args.output else None)
+        story_path = args.file.resolve()
+        if args.output:
+            output = build_story(root, story_path, args.output.resolve())
+        else:
+            try:
+                config = find_site_config(story_path)
+            except RuntimeError:
+                output = build_story(root, story_path)
+            else:
+                output = build_site_story(config, story_path)
         print(f"Built {output / 'index.html'}")
         return 0
     if args.command == "site":

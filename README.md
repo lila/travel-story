@@ -165,8 +165,12 @@ story preview yellowstone.story
 story build yellowstone.story
 ```
 
-Saving the file refreshes the preview. The build appears at
-`public/yellowstone/index.html` and can be hosted by any static web server.
+Saving the file refreshes the preview. When a `site.toml` exists above the
+story, a single-story build preserves the source path inside the site's
+configured output: `yellowstone/trip1.story` becomes
+`public/yellowstone/trip1/index.html`. Without a `site.toml`, the standalone
+fallback remains `<trip>/public/trip1/index.html`. An explicit `--output`
+always takes precedence.
 Photographs in a story are clickable. Each opens a quiet, static photo page
 showing its stable photo ID and available camera, lens, exposure, capture-time,
 and dimension metadata. Captions remain part of their story placement; they are
