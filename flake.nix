@@ -29,6 +29,7 @@
             dependencies = with python.pkgs; [
               markdown
               pillow
+              staticmap
             ];
 
             nativeCheckInputs = [ python.pkgs.pytestCheckHook ];

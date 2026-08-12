@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from .maps import get_coords
 from .parser import parse_story
 from .project import connect, state_dir
 
@@ -21,6 +22,27 @@ def check_story(root: Path, story_path: Path) -> list[Issue]:
     issues: list[Issue] = []
     if not story.metadata.get("title"):
         issues.append(Issue("warning", "Story has no title in front matter"))
+
+    for node in story.nodes:
+        if node.kind != "map":
+            continue
+        has_source = node.options.get("gpx") or node.options.get("waypoints") or node.options.get("places")
+        if not has_source:
+            issues.append(Issue("error", "@map requires gpx:, waypoints:, or places:"))
+            continue
+        layout = node.options.get("layout", "standard").lower()
+        if layout not in VALID_LAYOUTS:
+            issues.append(Issue("error", f"Unknown map layout: {layout}"))
+        places = node.options.get("places")
+        if places:
+            count = len([p for p in places.split(",") if p.strip()])
+            if count < 2:
+                issues.append(Issue("error", "places: requires at least two place names"))
+        else:
+            try:
+                get_coords(node, story_path)
+            except RuntimeError as exc:
+                issues.append(Issue("error", str(exc)))
 
     with connect(root) as db:
         for node in story.nodes:

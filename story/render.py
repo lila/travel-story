@@ -57,11 +57,27 @@ def render_story(
     photo_page_url: Callable[[Any], str] | None = None,
     live: bool = False,
     home_url: str | None = None,
+    map_urls: dict[int, str] | None = None,
 ) -> str:
     title = story.metadata.get("title", "Untitled story")
     body: list[str] = []
     first_markdown = True
-    for node in story.nodes:
+    for index, node in enumerate(story.nodes):
+        if node.kind == "map":
+            url = (map_urls or {}).get(index)
+            caption = node.options.get("caption")
+            layout = node.options.get("layout", "standard")
+            if url is None:
+                body.append('<div class="missing">Map not yet rendered</div>')
+            else:
+                img = f'<img src="{html.escape(url)}" alt="{html.escape(caption or "Map")}" loading="lazy">'
+                body.append(
+                    f'<figure class="photos {html.escape(layout)}">'
+                    + img
+                    + (f'<figcaption>{html.escape(caption)}</figcaption>' if caption else "")
+                    + "</figure>"
+                )
+            continue
         if node.kind == "markdown":
             text = node.text
             if first_markdown:
@@ -151,6 +167,7 @@ def build_story(
     output_base: Path | None = None,
     home_url: str | None = None,
 ) -> Path:
+    from .maps import build_map_image
     from .parser import parse_story
     story = parse_story(story_path)
     photos = get_photos(root, story.photo_ids)
@@ -171,12 +188,22 @@ def build_story(
         shutil.copy2(cached, images / name)
         return f"images/{name}"
 
+    map_urls: dict[int, str] = {}
+    for node_index, node in enumerate(story.nodes):
+        if node.kind != "map":
+            continue
+        cached_map = build_map_image(root, story_path, node)
+        name = f"map-{node_index}.png"
+        shutil.copy2(cached_map, images / name)
+        map_urls[node_index] = f"images/{name}"
+
     page = render_story(
         story,
         photos,
         copy_image,
         lambda photo: f"photos/{photo['id']}/",
         home_url=home_url,
+        map_urls=map_urls,
     )
     (output / "index.html").write_text(page, encoding="utf-8")
     (output / "style.css").write_text(STYLE, encoding="utf-8")

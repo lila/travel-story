@@ -341,6 +341,37 @@ renderers. The body is Markdown. Photo directives occupy their own line:
 
 IDs may be unambiguous prefixes of the displayed 12-character ID.
 
+`@map` places a static map image generated at build time from OpenStreetMap
+tiles. No JavaScript or external service is involved at read time; the result
+is an ordinary image file. Supply either a GPX file or an explicit list of
+waypoints:
+
+```text
+@map
+gpx: bozeman-to-lodge.gpx
+caption: The drive south from Bozeman into the park.
+```
+
+```text
+@map
+waypoints: 45.6770,-111.0429 44.4605,-110.8281
+caption: Bozeman to Old Faithful.
+layout: large
+```
+
+Place names are separated by commas. Geocoding uses the Nominatim service
+(OpenStreetMap) at build time — no API key required. Waypoints are written as
+`lat,lon` pairs separated by spaces. The `layout` option accepts the same
+values as photo directives (`standard`, `large`, `full`); it defaults to
+`standard`. GPX tracks record the road actually driven; waypoints and place
+names draw straight segments between the resolved coordinates.
+
+Rendered map images are cached in `.story/cache/maps/` keyed by the content
+of the GPX file or waypoint string, so repeated builds do not re-fetch tiles.
+Geocoded place names are cached in `.story/cache/geocode/` — each name is
+looked up once and reused without further network requests. The live preview
+server renders maps on demand using the same caches.
+
 ## Architecture and ownership
 
 Running `story init` creates:
@@ -351,6 +382,8 @@ Running `story init` creates:
   cache/
     thumbnails/
     previews/
+    maps/
+    geocode/
 ```
 
 The SQLite catalog stores paths, a SHA-256 content identity, EXIF metadata, and

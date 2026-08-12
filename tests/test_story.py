@@ -250,6 +250,95 @@ def test_site_builds_trips_from_independent_photo_catalogs(tmp_path: Path):
     assert (output / "san-diego" / "journal" / "images").is_dir()
 
 
+def test_map_waypoints_parses(tmp_path: Path):
+    story_file = tmp_path / "trip.story"
+    story_file.write_text(
+        "---\ntitle: Yellowstone\n---\n\nWe drove south.\n\n"
+        "@map\n"
+        "waypoints: 45.6770,-111.0429 44.4605,-110.8281\n"
+        "caption: Bozeman to Old Faithful.\n"
+        "layout: large\n"
+        "\nMore prose.\n"
+    )
+    story = parse_story(story_file)
+    map_nodes = [n for n in story.nodes if n.kind == "map"]
+    assert len(map_nodes) == 1
+    node = map_nodes[0]
+    assert node.options["waypoints"] == "45.6770,-111.0429 44.4605,-110.8281"
+    assert node.options["caption"] == "Bozeman to Old Faithful."
+    assert node.options["layout"] == "large"
+    assert node.photo_ids == []
+    prose = [n for n in story.nodes if n.kind == "markdown"]
+    assert any("drove south" in n.text for n in prose)
+    assert any("More prose" in n.text for n in prose)
+
+
+def test_map_gpx_parses(tmp_path: Path):
+    gpx_file = tmp_path / "route.gpx"
+    gpx_file.write_text(
+        '<?xml version="1.0"?>\n'
+        '<gpx xmlns="http://www.topografix.com/GPX/1/1">\n'
+        '  <trk><trkseg>\n'
+        '    <trkpt lat="45.677" lon="-111.042"></trkpt>\n'
+        '    <trkpt lat="44.460" lon="-110.828"></trkpt>\n'
+        '  </trkseg></trk>\n'
+        '</gpx>\n'
+    )
+    story_file = tmp_path / "trip.story"
+    story_file.write_text(
+        "---\ntitle: Yellowstone\n---\n\n"
+        "@map\n"
+        "gpx: route.gpx\n"
+        "caption: The drive in.\n"
+    )
+    story = parse_story(story_file)
+    map_nodes = [n for n in story.nodes if n.kind == "map"]
+    assert len(map_nodes) == 1
+    assert map_nodes[0].options["gpx"] == "route.gpx"
+    assert map_nodes[0].options["caption"] == "The drive in."
+
+
+def test_map_rendered_as_figure(tmp_path: Path):
+    """A map node with a known URL should render as a figure in the HTML."""
+    from story.render import render_story
+    from story.parser import Story, Node
+
+    story = Story(
+        metadata={"title": "Trip"},
+        nodes=[Node("map", options={"caption": "Bozeman to lodge", "layout": "standard"})],
+    )
+    page = render_story(story, {}, lambda p: "", map_urls={0: "images/map-3.png"})
+    assert 'src="images/map-3.png"' in page
+    assert "Bozeman to lodge" in page
+    assert '<figure class="photos standard">' in page
+
+
+def test_map_places_parses(tmp_path: Path):
+    story_file = tmp_path / "trip.story"
+    story_file.write_text(
+        "---\ntitle: Yellowstone\n---\n\n"
+        "@map\n"
+        "places: Bozeman MT, Old Faithful Yellowstone\n"
+        "caption: The drive south.\n"
+    )
+    story = parse_story(story_file)
+    map_nodes = [n for n in story.nodes if n.kind == "map"]
+    assert len(map_nodes) == 1
+    assert map_nodes[0].options["places"] == "Bozeman MT, Old Faithful Yellowstone"
+
+
+def test_map_missing_url_renders_placeholder(tmp_path: Path):
+    from story.render import render_story
+    from story.parser import Story, Node
+
+    story = Story(
+        metadata={"title": "Trip"},
+        nodes=[Node("map", options={})],
+    )
+    page = render_story(story, {}, lambda p: "")
+    assert "Map not yet rendered" in page
+
+
 def test_single_build_preserves_story_path_within_site(tmp_path: Path, monkeypatch):
     source = tmp_path / "san-diego"
     source.mkdir()

@@ -10,6 +10,7 @@ import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+from .maps import build_map_image
 from .parser import parse_story
 from .photos import get_photos, search_photos
 from .project import state_dir
@@ -42,6 +43,17 @@ def serve_preview(root: Path, path: Path, host: str, port: int, open_browser: bo
                     if image.exists():
                         return _send(self, image.read_bytes(), "image/webp")
                     return _send(self, b"not found", "text/plain", 404)
+                if request.path.startswith("/map/"):
+                    node_index = int(request.path.rsplit("/", 1)[-1])
+                    story = parse_story(path)
+                    map_nodes = [
+                        (i, n) for i, n in enumerate(story.nodes) if n.kind == "map"
+                    ]
+                    match = next((n for i, n in map_nodes if i == node_index), None)
+                    if match is None:
+                        return _send(self, b"not found", "text/plain", 404)
+                    cached = build_map_image(root, path, match)
+                    return _send(self, cached.read_bytes(), "image/png")
                 story = parse_story(path)
                 photos = get_photos(root, story.photo_ids)
                 if request.path.startswith("/photo/"):
@@ -57,12 +69,18 @@ def serve_preview(root: Path, path: Path, host: str, port: int, open_browser: bo
                         story.metadata.get("title", "story"),
                     )
                     return _send(self, page.encode(), "text/html; charset=utf-8")
+                map_urls = {
+                    i: f"/map/{i}"
+                    for i, n in enumerate(story.nodes)
+                    if n.kind == "map"
+                }
                 page = render_story(
                     story,
                     photos,
                     lambda p: f"/image/{p['id']}",
                     lambda p: f"/photo/{p['id']}/",
                     live=True,
+                    map_urls=map_urls,
                 )
                 return _send(self, page.encode(), "text/html; charset=utf-8")
             except Exception as error:

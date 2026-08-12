@@ -48,24 +48,34 @@ def parse_story(path: Path) -> Story:
 
     index = 0
     while index < len(lines):
-        match = re.match(r"^@(photo|photos)\s+(.+?)\s*$", lines[index])
-        if not match:
+        photo_match = re.match(r"^@(photo|photos)\s+(.+?)\s*$", lines[index])
+        map_match = re.match(r"^@map\s*$", lines[index])
+        if not photo_match and not map_match:
             prose.append(lines[index])
             index += 1
             continue
         flush()
-        ids = match.group(2).split()
-        if match.group(1) == "photo":
-            ids = ids[:1]
+        if map_match:
+            kind = "map"
+            ids: list[str] = []
+        else:
+            ids = photo_match.group(2).split()  # type: ignore[union-attr]
+            if photo_match.group(1) == "photo":  # type: ignore[union-attr]
+                ids = ids[:1]
+            kind = "photos"
         options: dict[str, str] = {}
         index += 1
         while index < len(lines):
-            option = re.match(r"^(layout|caption|relationship):\s*(.+)$", lines[index], re.I)
+            option = re.match(
+                r"^(layout|caption|relationship|gpx|waypoints|places):\s*(.+)$",
+                lines[index],
+                re.I,
+            )
             if not option:
                 break
             options[option.group(1).lower()] = option.group(2).strip()
             index += 1
-        nodes.append(Node("photos", photo_ids=ids, options=options))
+        nodes.append(Node(kind, photo_ids=ids, options=options))
     flush()
     return Story(metadata, nodes)
 
