@@ -133,9 +133,13 @@ def build_map_image(root: Path, story_path: Path, node: Node) -> Path:
         return cached
 
     coords = get_coords(node, story_path, root)
+    mark_all = bool(node.options.get("waypoints") or node.options.get("places"))
 
     m = StaticMap(_MAP_WIDTH, _MAP_HEIGHT, url_template=_TILE_URL)
     m.add_line(Line(coords, "#c0392b", 3))
+    if mark_all:
+        for coord in coords[1:-1]:
+            m.add_marker(CircleMarker(coord, "#2c3e50", 10))
     m.add_marker(CircleMarker(coords[0], "#2c3e50", 14))
     m.add_marker(CircleMarker(coords[-1], "#2c3e50", 14))
 
