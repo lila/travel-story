@@ -168,8 +168,8 @@ story build yellowstone.story
 Saving the file refreshes the preview. When a `site.toml` exists above the
 story, a single-story build preserves the source path inside the site's
 configured output: `yellowstone/trip1.story` becomes
-`public/yellowstone/trip1/index.html`. Without a `site.toml`, the standalone
-fallback remains `<trip>/public/trip1/index.html`. An explicit `--output`
+`docs/yellowstone/trip1/index.html`. Without a `site.toml`, the standalone
+fallback remains `<trip>/docs/trip1/index.html`. An explicit `--output`
 always takes precedence.
 Photographs in a story are clickable. Each opens a quiet, static photo page
 showing its stable photo ID and available camera, lens, exposure, capture-time,
@@ -205,7 +205,7 @@ stories:
 ```toml
 title = "The Karan Family Travels"
 description = "Photographic stories from the road."
-output = "public"
+output = "docs"
 
 stories = [
   "yellowstone/prologue.story",
@@ -231,7 +231,7 @@ The complete site is replaced as one build, so an error cannot leave a mixture
 of old and new pages. The result has ordinary static files and directories:
 
 ```text
-public/
+docs/
   index.html
   style.css
   yellowstone/
@@ -246,15 +246,52 @@ public/
 ```
 
 The story's relative source path supplies its URL: `yellowstone/prologue.story`
-becomes `public/yellowstone/prologue/`. Its front matter supplies the title,
+becomes `docs/yellowstone/prologue/`. Its front matter supplies the title,
 subtitle, and date shown on the homepage. The homepage groups stories by their
 source directory, so both Yellowstone stories appear together under a
 “Yellowstone” collection heading.
 The source directories retain their `.story` files and local photo catalogs;
-all generated publication artifacts go only into the top-level `public/`.
+all generated publication artifacts go only into the top-level `docs/`.
 During a complete build, each story uses the nearest `.story` catalog above its
 source file. Yellowstone and San Diego therefore remain independent photo
 libraries even though one `site.toml` publishes them together.
+
+### Publish to GitHub Pages
+
+The writing repository — which holds your `.story` files, photo catalog, and
+built output — is separate from the Travel Story code repository. GitHub Pages
+serves the `docs/` directory directly from it.
+
+One-time setup: create the repository on GitHub, point your local writing
+directory at it, and enable Pages.
+
+Create the repository on GitHub (via the website or the `gh` CLI), then from
+your writing directory:
+
+```sh
+cd ~/karans-stories
+git init
+git remote add origin https://github.com/username/karans-stories.git
+git add .
+git commit -m "Initial commit"
+git push -u origin main
+```
+
+Then in the repository's Settings → Pages, set the source to the `main` branch
+and the `/docs` folder and save. GitHub will show you the URL your site is
+published at (typically `https://username.github.io/karans-stories/`).
+
+Each time you are ready to publish:
+
+```sh
+story site build
+git add docs/
+git commit -m "Publish"
+git push
+```
+
+GitHub Pages picks up the push automatically. No CI step is needed: the build
+runs locally where your photo originals and image cache already live.
 
 ### Check and maintain a story
 

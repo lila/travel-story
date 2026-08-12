@@ -64,13 +64,10 @@ def load_site_config(root: Path, config_path: Path | None = None) -> SiteConfig:
     if not title:
         raise RuntimeError("site.toml requires a non-empty title")
     description = str(data.get("description", "")).strip()
-    output_value = data.get("output", "public")
+    output_value = data.get("output", "docs")
     if not isinstance(output_value, str) or not output_value.strip():
         raise RuntimeError("site.toml output must be a directory name")
     output = _inside(root, root / output_value, "Site output")
-    relative_output = output.relative_to(root.resolve())
-    if not relative_output.parts or relative_output.parts[0] != "public":
-        raise RuntimeError("site.toml output must be public or a directory inside public")
 
     story_values = data.get("stories")
     if not isinstance(story_values, list) or not story_values:

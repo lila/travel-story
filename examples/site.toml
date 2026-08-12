@@ -1,6 +1,6 @@
 title = "Family Travels"
 description = "Photographic stories from the road."
-output = "public"
+output = "docs"
 
 stories = [
   "yellowstone/prologue.story",

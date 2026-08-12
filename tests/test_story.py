@@ -211,11 +211,11 @@ def test_site_uses_catalog_nearest_each_story_and_top_level_output(tmp_path: Pat
     assert find_site_config(source) == config
     output, count = build_site(tmp_path, config)
     assert count == 1
-    assert output == tmp_path / "public"
-    assert (tmp_path / "public" / "trip" / "chapter" / "index.html").exists()
-    page = (tmp_path / "public" / "trip" / "chapter" / "index.html").read_text()
+    assert output == tmp_path / "docs"
+    assert (tmp_path / "docs" / "trip" / "chapter" / "index.html").exists()
+    page = (tmp_path / "docs" / "trip" / "chapter" / "index.html").read_text()
     assert 'href="../../">← All stories</a>' in page
-    index = (tmp_path / "public" / "index.html").read_text()
+    index = (tmp_path / "docs" / "index.html").read_text()
     assert 'href="trip/chapter/"' in index
     assert '<section class="collection"><h2>Trip</h2>' in index
     assert not (source / "public").exists()
@@ -262,7 +262,7 @@ def test_single_build_preserves_story_path_within_site(tmp_path: Path, monkeypat
     monkeypatch.chdir(source)
 
     assert run_cli(cli_parser().parse_args(["build", "trip1.story"])) == 0
-    page = tmp_path / "public" / "san-diego" / "trip1" / "index.html"
+    page = tmp_path / "docs" / "san-diego" / "trip1" / "index.html"
     assert page.exists()
-    assert not (source / "public").exists()
+    assert not (source / "docs").exists()
     assert 'href="../../">← All stories</a>' in page.read_text()

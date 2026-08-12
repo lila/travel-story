@@ -155,7 +155,7 @@ def build_story(
     story = parse_story(story_path)
     photos = get_photos(root, story.photo_ids)
     slug = story_path.stem
-    output = (output_base or root / "public") / slug
+    output = (output_base or root / "docs") / slug
     images = output / "images"
     if output.exists():
         if not output.is_dir() or output.is_symlink():
