@@ -38,6 +38,7 @@ def _front_matter(lines: list[str]) -> tuple[dict[str, str], list[str]]:
 
 def parse_story(path: Path) -> Story:
     metadata, lines = _front_matter(path.read_text(encoding="utf-8").splitlines())
+    lines = [line for line in lines if not line.lstrip().startswith("//")]
     nodes: list[Node] = []
     prose: list[str] = []
 

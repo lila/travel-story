@@ -250,6 +250,21 @@ def test_site_builds_trips_from_independent_photo_catalogs(tmp_path: Path):
     assert (output / "san-diego" / "journal" / "images").is_dir()
 
 
+def test_comments_are_stripped(tmp_path: Path):
+    story_file = tmp_path / "trip.story"
+    story_file.write_text(
+        "---\ntitle: Yellowstone\n---\n\n"
+        "// TODO: add more prose here\n"
+        "We drove south.\n"
+        "// another comment\n"
+    )
+    story = parse_story(story_file)
+    prose = " ".join(n.text for n in story.nodes if n.kind == "markdown")
+    assert "drove south" in prose
+    assert "TODO" not in prose
+    assert "comment" not in prose
+
+
 def test_map_waypoints_parses(tmp_path: Path):
     story_file = tmp_path / "trip.story"
     story_file.write_text(
