@@ -17,7 +17,7 @@
       packages = forAllSystems (system:
         let
           pkgs = import nixpkgs { inherit system; config.allowBroken = true; };
-          python = pkgs.python312;
+          python = pkgs.python313;
           travel-story = python.pkgs.buildPythonApplication {
             pname = "travel-story";
             version = "0.1.0";
@@ -29,6 +29,7 @@
             dependencies = with python.pkgs; [
               markdown
               pillow
+              pillow-heif
               staticmap
             ];
 
@@ -71,7 +72,7 @@
             packages = [
               self.packages.${system}.default
               pkgs.exiftool
-              pkgs.python312.pkgs.pytest
+              pkgs.python313.pkgs.pytest
               pkgs.uv
               install-osxphotos
             ];

@@ -10,6 +10,11 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from PIL import Image, ImageOps
+try:
+    from pillow_heif import register_heif_opener
+    register_heif_opener()
+except ImportError:
+    pass
 
 from .project import connect, state_dir
 
