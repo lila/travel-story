@@ -143,16 +143,24 @@ def test_check_rejects_invalid_pair_and_unknown_photo(tmp_path: Path):
 
 def test_apple_album_resolves_original_paths(tmp_path: Path, monkeypatch):
     original = tmp_path / "Photos Library.photoslibrary" / "originals" / "bison.jpg"
+    edited = tmp_path / "Photos Library.photoslibrary" / "derivatives" / "bison_edit.jpg"
     original.parent.mkdir(parents=True)
+    edited.parent.mkdir(parents=True)
     original.write_bytes(b"photo")
+    edited.write_bytes(b"edited photo")
 
     class Result:
-        stdout = f"{original}\n/missing/icloud-only.heic\n"
+        stdout = (
+            "path,path_edited\n"
+            f"{original},{edited}\n"          # edited version available
+            f"{original},\n"                  # no edits, use original
+            "/missing/icloud-only.heic,\n"   # iCloud only, unavailable
+        )
 
     monkeypatch.setattr("story.photos.shutil.which", lambda name: "/bin/osxphotos")
     monkeypatch.setattr("story.photos.subprocess.run", lambda *args, **kwargs: Result())
     paths, unavailable = photos_in_apple_album("Yellowstone")
-    assert paths == [original]
+    assert paths == [edited.resolve(), original.resolve()]
     assert unavailable == 1
 
 

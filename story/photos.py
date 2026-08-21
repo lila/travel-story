@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import csv
 import hashlib
+import io
 import json
 import shutil
 import sqlite3
@@ -97,10 +99,12 @@ def add_photos(root: Path, directory: Path) -> tuple[int, int, int]:
 
 
 def photos_in_apple_album(album: str, library: Path | None = None) -> tuple[list[Path], int]:
-    """Return locally available originals from an Apple Photos album.
+    """Return locally available photo paths from an Apple Photos album.
 
     OSXPhotos reads the Photos database without exporting or modifying assets.
-    A blank path means the original is currently only in iCloud.
+    The edited version of a photo is preferred over the original when available,
+    so brightness, contrast, and crop adjustments made in Photos are reflected
+    in the story. Photos available only in iCloud are counted as unavailable.
     """
     executable = shutil.which("osxphotos")
     if not executable:
@@ -109,9 +113,7 @@ def photos_in_apple_album(album: str, library: Path | None = None) -> tuple[list
             "`osxphotos` command. Nixpkgs marks it broken on macOS; native "
             "PhotoKit support is still needed."
         )
-    command = [
-        executable, "query", "--album", album, "--quiet", "--print", "{photo.path}"
-    ]
+    command = [executable, "query", "--album", album, "--quiet", "--csv"]
     if library is not None:
         library = library.expanduser().resolve()
         command.extend(["--library", str(library)])
@@ -120,9 +122,18 @@ def photos_in_apple_album(album: str, library: Path | None = None) -> tuple[list
     except subprocess.CalledProcessError as error:
         detail = (error.stderr or error.stdout).strip()
         raise RuntimeError(f"Could not read Apple Photos album {album!r}: {detail}") from error
-    reported = [line.strip() for line in result.stdout.splitlines() if line.strip()]
-    paths = [Path(value).resolve() for value in reported if Path(value).is_file()]
-    return paths, len(reported) - len(paths)
+    paths: list[Path] = []
+    unavailable = 0
+    for row in csv.DictReader(io.StringIO(result.stdout)):
+        edited = (row.get("path_edited") or "").strip()
+        original = (row.get("path") or "").strip()
+        if edited and Path(edited).is_file():
+            paths.append(Path(edited).resolve())
+        elif original and Path(original).is_file():
+            paths.append(Path(original).resolve())
+        else:
+            unavailable += 1
+    return paths, unavailable
 
 
 def add_apple_album(
