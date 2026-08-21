@@ -23,7 +23,7 @@ h2 { font-weight:400; font-size:1.65rem; margin-top:3em; margin-bottom:.7em } ma
 figure { margin:3.5em 0 } figure img { display:block; width:100%; height:auto; background:#eee } figcaption { grid-column:1/-1; color:var(--muted); font-size:.88rem; line-height:1.45; margin-top:.8em }
 .photo-link { display:block; text-decoration:none }
 .photos { display:grid; gap:12px } .photos.standard { max-width:640px; margin-left:auto; margin-right:auto } .photos.large { width:min(88vw,1050px); margin-left:50%; transform:translateX(-50%) } .photos.pair { grid-template-columns:repeat(2,minmax(0,1fr)); margin-left:-8vw; margin-right:-8vw }
-.photos.pair img { width:100%; aspect-ratio:3/2; object-fit:cover }
+.photos.pair img { width:100%; height:auto }
 .photos.full { width:min(96vw,1400px); margin-left:50%; transform:translateX(-50%) } .missing { border:1px solid var(--rule); padding:2em; color:#9b3c31 }
 .photo-detail { max-width:1200px } .photo-detail>img { display:block; width:100%; height:auto }
 .metadata { max-width:760px; display:grid; grid-template-columns:max-content 1fr; gap:.35rem 1.5rem; border-top:1px solid var(--rule); padding-top:1.5rem; margin-top:2.5rem; font-size:.92rem } .metadata dt { color:var(--muted) } .metadata dd { margin:0 } .back { display:inline-block; margin-bottom:1.5rem; font-size:.92rem }

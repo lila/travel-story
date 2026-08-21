@@ -80,10 +80,10 @@ def test_markdown_links_distinguish_external_and_internal(tmp_path: Path):
     assert '<a href="#next">continue below</a>' in page
 
 
-def test_pair_layout_uses_matching_cropped_frames():
+def test_pair_layout_preserves_natural_aspect_ratio():
     assert ".photos.pair img" in STYLE
-    assert "aspect-ratio:3/2" in STYLE
-    assert "object-fit:cover" in STYLE
+    assert "aspect-ratio" not in STYLE
+    assert "object-fit:cover" not in STYLE
 
 
 def test_check_cache_rebuild_clean_build_and_asset_credit(tmp_path: Path):
