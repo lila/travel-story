@@ -6,6 +6,7 @@ from story.parser import parse_story
 from story.cli import parser as cli_parser, run as run_cli
 from story.photos import (
     add_photos,
+    clean_photos,
     photos_in_apple_album,
     rebuild_cache,
     search_photos,
@@ -139,6 +140,21 @@ def test_check_rejects_invalid_pair_and_unknown_photo(tmp_path: Path):
     messages = [issue.message for issue in check_story(tmp_path, story_file)]
     assert "Pair layout requires exactly two photos" in messages
     assert "Unknown photo ID: unknown" in messages
+
+
+def test_clean_removes_missing_entries(tmp_path: Path):
+    root = tmp_path
+    init_project(root)
+    present = tmp_path / "originals" / "here.jpg"
+    present.parent.mkdir()
+    Image.new("RGB", (100, 100)).save(present)
+    add_photos(root, present.parent)
+    all_photos = search_photos(root, "")
+    assert len(all_photos) == 1
+    present.unlink()  # simulate file going missing
+    removed, cache_cleared = clean_photos(root)
+    assert removed == 1
+    assert search_photos(root, "") == []
 
 
 def test_apple_album_resolves_original_paths(tmp_path: Path, monkeypatch):

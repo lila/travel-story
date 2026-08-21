@@ -113,7 +113,7 @@ def photos_in_apple_album(album: str, library: Path | None = None) -> tuple[list
             "`osxphotos` command. Nixpkgs marks it broken on macOS; native "
             "PhotoKit support is still needed."
         )
-    command = [executable, "query", "--album", album, "--quiet", "--csv"]
+    command = [executable, "query", "--album", album, "--quiet"]
     if library is not None:
         library = library.expanduser().resolve()
         command.extend(["--library", str(library)])
@@ -275,6 +275,31 @@ def rebuild_cache(root: Path, ids: Iterable[str] | None = None) -> tuple[int, in
         else:
             unavailable += 1
     return rebuilt, unavailable, unknown
+
+
+def clean_photos(root: Path) -> tuple[int, int]:
+    """Remove catalog entries whose original file no longer exists on disk.
+
+    Also removes the corresponding thumbnail and preview cache files.
+    Returns (entries_removed, cache_files_cleared).
+    """
+    removed_ids: list[str] = []
+    with connect(root) as db:
+        for row in db.execute("SELECT id, path FROM photos"):
+            if not Path(row["path"]).is_file():
+                db.execute("DELETE FROM photos WHERE id = ?", (row["id"],))
+                db.execute("DELETE FROM photo_search WHERE photo_id = ?", (row["id"],))
+                removed_ids.append(row["id"])
+
+    cache = state_dir(root) / "cache"
+    cache_cleared = 0
+    for photo_id in removed_ids:
+        for folder in ("thumbnails", "previews"):
+            f = cache / folder / f"{photo_id}.webp"
+            if f.exists():
+                f.unlink()
+                cache_cleared += 1
+    return len(removed_ids), cache_cleared
 
 
 def update_photo_metadata(

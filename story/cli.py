@@ -7,6 +7,7 @@ from pathlib import Path
 from .photos import (
     add_apple_album,
     add_photos,
+    clean_photos,
     rebuild_cache,
     search_photos,
     update_photo_metadata,
@@ -26,7 +27,7 @@ def parser() -> argparse.ArgumentParser:
 
     photos = commands.add_parser("photos", help="browse, add, or search photographs")
     photos.add_argument(
-        "action", nargs="?", choices=["add", "add-album", "search", "rebuild-cache", "set"]
+        "action", nargs="?", choices=["add", "add-album", "search", "rebuild-cache", "set", "clean"]
     )
     photos.add_argument("values", nargs="*")
     photos.add_argument("--library", type=Path, help="an alternate Photos Library.photoslibrary")
@@ -94,6 +95,9 @@ def run(args: argparse.Namespace) -> int:
             )
             if unavailable or unknown:
                 return 1
+        elif args.action == "clean":
+            removed, cache_cleared = clean_photos(root)
+            print(f"Removed {removed} catalog entries; cleared {cache_cleared} cache files.")
         elif args.action == "set":
             if len(args.values) != 1:
                 raise RuntimeError("Usage: story photos set ID [--credit TEXT] [--source-url URL]")
