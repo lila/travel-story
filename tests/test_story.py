@@ -167,10 +167,12 @@ def test_apple_album_resolves_original_paths(tmp_path: Path, monkeypatch):
 
     class Result:
         stdout = (
-            "path,path_edited\n"
-            f"{original},{edited}\n"          # edited version available
-            f"{original},\n"                  # no edits, use original
-            "/missing/icloud-only.heic,\n"   # iCloud only, unavailable
+            "Using last opened Photos library: /fake/Photos Library.photoslibrary\n"
+            "Processing database ...\n"
+            f"uuid,path,path_edited\n"
+            f"aaa,{original},{edited}\n"         # edited version available
+            f"bbb,{original},\n"                 # no edits, use original
+            "ccc,/missing/icloud-only.heic,\n"  # iCloud only, unavailable
         )
 
     monkeypatch.setattr("story.photos.shutil.which", lambda name: "/bin/osxphotos")

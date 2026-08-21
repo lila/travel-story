@@ -113,7 +113,7 @@ def photos_in_apple_album(album: str, library: Path | None = None) -> tuple[list
             "`osxphotos` command. Nixpkgs marks it broken on macOS; native "
             "PhotoKit support is still needed."
         )
-    command = [executable, "query", "--album", album, "--quiet"]
+    command = [executable, "query", "--album", album]
     if library is not None:
         library = library.expanduser().resolve()
         command.extend(["--library", str(library)])
@@ -122,9 +122,14 @@ def photos_in_apple_album(album: str, library: Path | None = None) -> tuple[list
     except subprocess.CalledProcessError as error:
         detail = (error.stderr or error.stdout).strip()
         raise RuntimeError(f"Could not read Apple Photos album {album!r}: {detail}") from error
+    # osxphotos writes processing messages to stdout before the CSV data;
+    # find the header row so we parse only the CSV portion.
+    csv_start = result.stdout.find("uuid,")
+    if csv_start == -1:
+        return [], 0
     paths: list[Path] = []
     unavailable = 0
-    for row in csv.DictReader(io.StringIO(result.stdout)):
+    for row in csv.DictReader(io.StringIO(result.stdout[csv_start:])):
         edited = (row.get("path_edited") or "").strip()
         original = (row.get("path") or "").strip()
         if edited and Path(edited).is_file():
