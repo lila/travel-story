@@ -215,7 +215,7 @@ def add_photo_paths(root: Path, paths: Iterable[Path]) -> tuple[int, int, int]:
 def search_photos(root: Path, query: str, limit: int = 50) -> list[Any]:
     with connect(root) as db:
         if not query.strip():
-            return list(db.execute("SELECT * FROM photos ORDER BY captured_at DESC, filename LIMIT ?", (limit,)))
+            return list(db.execute("SELECT * FROM photos ORDER BY captured_at DESC, filename"))
         words = [word.replace('"', '') for word in query.split() if word.replace('"', '')]
         fts_query = " AND ".join(f'"{word}"*' for word in words)
         try:
