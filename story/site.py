@@ -18,17 +18,16 @@ from .render import STYLE, build_story
 
 
 SITE_STYLE = STYLE + """\
-.site-header { margin-bottom:4rem }
-.site-header h1 { max-width:900px }
-.site-intro { max-width:640px; color:var(--muted); font-size:1.08rem }
-.collection { margin-top:3.5rem }
-.collection>h2 { margin:0 0 1rem; color:var(--muted); font-size:1rem; letter-spacing:.08em; text-transform:uppercase }
-.story-list { list-style:none; max-width:760px; margin:0; padding:0 }
-.story-list li { border-bottom:1px solid var(--rule) }
-.story-list a { display:block; padding:1.6rem 0 1.8rem; text-decoration:none }
-.story-list h3 { margin:0 0 .25rem; font-size:1.7rem; font-weight:400 }
-.story-list p { margin:.15rem 0; color:var(--muted) }
-.story-list a:hover h3 { text-decoration:underline; text-decoration-thickness:1px; text-underline-offset:.18em }
+.site-header { margin-bottom:2rem }
+.site-header h1 { font-size:clamp(1.8rem,4vw,2.8rem); margin:0 0 .4rem }
+.site-intro { max-width:640px; color:var(--muted); font-size:.95rem; margin:0 }
+.collection { margin-top:2rem }
+.collection>h2 { font-size:1.25rem; font-weight:400; margin:0 0 .35rem; padding-bottom:.35rem; border-bottom:1px solid var(--rule) }
+.story-list { list-style:none; margin:0; padding:0 }
+.story-list li { padding:.22rem 0 }
+.story-list a { text-decoration:none; font-size:.95rem; line-height:1.4 }
+.story-list a:hover .story-title { text-decoration:underline; text-decoration-thickness:1px; text-underline-offset:.15em }
+.story-meta { color:var(--muted) }
 """
 
 
@@ -107,11 +106,14 @@ def _render_index(root: Path, config: SiteConfig, parsed: list[tuple[Path, Story
         title = story.metadata.get("title", path.stem.replace("-", " ").title())
         subtitle = story.metadata.get("subtitle")
         date = story.metadata.get("date")
+        meta_parts = [p for p in [subtitle, date] if p]
+        meta = (
+            f' <span class="story-meta">· {html.escape(" · ".join(meta_parts))}</span>'
+            if meta_parts else ""
+        )
         groups.setdefault(relative_url.parent, []).append(
-            f'<li><a href="{html.escape(url)}/"><h3>{html.escape(title)}</h3>'
-            + (f'<p>{html.escape(subtitle)}</p>' if subtitle else "")
-            + (f'<p>{html.escape(date)}</p>' if date else "")
-            + "</a></li>"
+            f'<li><a href="{html.escape(url)}/">'
+            f'<span class="story-title">{html.escape(title)}</span>{meta}</a></li>'
         )
     collections: list[str] = []
     for directory, entries in groups.items():
