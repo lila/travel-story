@@ -131,8 +131,8 @@ def run(args: argparse.Namespace) -> int:
         return 0
     if args.command == "site":
         config = args.config.resolve() if args.config else find_site_config()
-        output, count = build_site(config.parent, config)
-        print(f"Built {count} stories and {output / 'index.html'}")
+        output, built, reused = build_site(config.parent, config)
+        print(f"Built {built} stories, reused {reused} unchanged, and {output / 'index.html'}")
         return 0
     if args.command == "check":
         root = find_root(args.file)

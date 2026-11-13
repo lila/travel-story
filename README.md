@@ -228,7 +228,9 @@ story site build --config ~/karans-stories/site.toml
 ```
 
 The complete site is replaced as one build, so an error cannot leave a mixture
-of old and new pages. The result has ordinary static files and directories:
+of old and new pages. Stories that have not changed since the last build are
+copied from the existing output rather than rebuilt (see below). The result has
+ordinary static files and directories:
 
 ```text
 docs/
@@ -255,6 +257,29 @@ all generated publication artifacts go only into the top-level `docs/`.
 During a complete build, each story uses the nearest `.story` catalog above its
 source file. Yellowstone and San Diego therefore remain independent photo
 libraries even though one `site.toml` publishes them together.
+
+### Incremental builds and multiple computers
+
+`story site build` records a fingerprint of every story in
+`docs/.story-build.json`. The fingerprint covers the story text, the catalog
+metadata of the photos it uses, its map inputs, and the Travel Story code
+itself. On the next build, a story whose fingerprint matches is copied
+unchanged from the existing `docs/`, so its photos do not need to be on this
+computer. The homepage is always regenerated.
+
+When a story does need rebuilding, each photo's image comes from the first
+available of:
+
+1. the preview cache in `.story/cache/previews/`,
+2. the original, which also refills the cache, or
+3. the image already published in `docs/<story>/images/`.
+
+This lets you write one trip on one computer and another trip on a second
+computer with a different Photos library. Commit `docs/` (including
+`.story-build.json`) and each catalog; leave `.story/cache/` out of git. A
+story can be rebuilt anywhere as long as any new photos it uses are available
+there. If a photo has no source at all, the build stops, lists every such
+photo, and leaves the previous output untouched.
 
 ### Publish to GitHub Pages
 

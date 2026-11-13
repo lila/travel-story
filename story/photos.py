@@ -20,6 +20,9 @@ except ImportError:
 
 from .project import connect, state_dir
 
+THUMBNAIL_SIZE = 480
+PREVIEW_SIZE = 1800
+
 PHOTO_EXTENSIONS = {
     ".jpg", ".jpeg", ".png", ".webp", ".tif", ".tiff", ".heic", ".heif",
     ".dng", ".raf", ".cr2", ".cr3", ".nef", ".arw", ".orf", ".rw2",
@@ -85,6 +88,21 @@ def _make_derivative(source: Path, destination: Path, max_size: int) -> bool:
         return True
     except (OSError, ValueError):
         return False
+
+
+def ensure_preview(root: Path, photo: Any) -> Path | None:
+    """Return the cached preview, regenerating it from the original if needed.
+
+    Returns None when the preview is not cached and the original is not
+    available on this machine.
+    """
+    preview = state_dir(root) / "cache" / "previews" / f'{photo["id"]}.webp'
+    if preview.is_file():
+        return preview
+    original = Path(photo["path"])
+    if original.is_file() and _make_derivative(original, preview, PREVIEW_SIZE):
+        return preview
+    return None
 
 
 def add_photos(root: Path, directory: Path) -> tuple[int, int, int]:
@@ -206,8 +224,8 @@ def add_photo_paths(root: Path, paths: Iterable[Path]) -> tuple[int, int, int]:
             except Exception:
                 pass
             cache = state_dir(root) / "cache"
-            _make_derivative(path, cache / "thumbnails" / f"{photo_id}.webp", 480)
-            _make_derivative(path, cache / "previews" / f"{photo_id}.webp", 1800)
+            _make_derivative(path, cache / "thumbnails" / f"{photo_id}.webp", THUMBNAIL_SIZE)
+            _make_derivative(path, cache / "previews" / f"{photo_id}.webp", PREVIEW_SIZE)
             added += 1
     return added, updated, skipped
 
@@ -270,10 +288,10 @@ def rebuild_cache(root: Path, ids: Iterable[str] | None = None) -> tuple[int, in
             unavailable += 1
             continue
         thumbnail = _make_derivative(
-            source, cache / "thumbnails" / f'{row["id"]}.webp', 480
+            source, cache / "thumbnails" / f'{row["id"]}.webp', THUMBNAIL_SIZE
         )
         preview = _make_derivative(
-            source, cache / "previews" / f'{row["id"]}.webp', 1800
+            source, cache / "previews" / f'{row["id"]}.webp', PREVIEW_SIZE
         )
         if thumbnail and preview:
             rebuilt += 1
