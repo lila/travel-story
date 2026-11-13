@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import html
+import json
 import shutil
 import tempfile
 from dataclasses import dataclass
@@ -14,7 +15,7 @@ except ModuleNotFoundError:  # Python 3.10
 
 from .parser import Story, parse_story
 from .project import find_root
-from .render import STYLE, build_story
+from .render import STYLE, build_story, story_fingerprint
 
 
 SITE_STYLE = STYLE + """\
@@ -133,22 +134,64 @@ def _render_index(root: Path, config: SiteConfig, parsed: list[tuple[Path, Story
     return f"""<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{html.escape(config.title)}</title><link rel="stylesheet" href="style.css"></head><body><main><header class="site-header"><h1>{html.escape(config.title)}</h1>{description}</header>{''.join(collections)}</main></body></html>"""
 
 
-def build_site(root: Path, config_path: Path | None = None) -> tuple[Path, int]:
+BUILD_RECORD = ".story-build.json"
+
+
+def _read_build_record(output: Path) -> dict[str, str]:
+    try:
+        record = json.loads((output / BUILD_RECORD).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return record if isinstance(record, dict) else {}
+
+
+def _write_build_record(output: Path, record: dict[str, str]) -> None:
+    (output / BUILD_RECORD).write_text(
+        json.dumps(record, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+
+
+def build_site(root: Path, config_path: Path | None = None) -> tuple[Path, int, int]:
+    """Build the site, reusing published stories that have not changed.
+
+    Returns the output directory, the number of stories built, and the number
+    reused unchanged from the previous output. A story is reused when its
+    fingerprint matches the build record committed alongside the output, so
+    it never needs its photos on this machine.
+    """
     config = load_site_config(root, config_path)
     parsed = [(path, parse_story(path)) for path in config.stories]
+    previous_record = _read_build_record(config.output)
+    record: dict[str, str] = {}
+    built = reused = 0
     stage = Path(tempfile.mkdtemp(prefix=".site-build-", dir=root))
 
     try:
         for story_path, _story in parsed:
             catalog_root = find_root(story_path)
             relative_url = _story_url(root, story_path)
-            output_base = stage / relative_url.parent
+            url = relative_url.as_posix()
             home_url = "../" * len(relative_url.parts)
-            build_story(catalog_root, story_path, output_base, home_url=home_url)
+            previous = config.output / relative_url
+            fingerprint = story_fingerprint(catalog_root, story_path, home_url)
+            if previous_record.get(url) == fingerprint and (previous / "index.html").is_file():
+                shutil.copytree(previous, stage / relative_url)
+                reused += 1
+            else:
+                build_story(
+                    catalog_root,
+                    story_path,
+                    stage / relative_url.parent,
+                    home_url=home_url,
+                    previous=previous,
+                )
+                built += 1
+            record[url] = fingerprint
         (stage / "index.html").write_text(
             _render_index(root, config, parsed), encoding="utf-8"
         )
         (stage / "style.css").write_text(SITE_STYLE, encoding="utf-8")
+        _write_build_record(stage, record)
 
         if config.output.exists():
             if not config.output.is_dir() or config.output.is_symlink():
@@ -160,7 +203,7 @@ def build_site(root: Path, config_path: Path | None = None) -> tuple[Path, int]:
         if stage.exists() and stage.is_dir() and not stage.is_symlink():
             shutil.rmtree(stage)
         raise
-    return config.output, len(parsed)
+    return config.output, built, reused
 
 
 def build_site_story(config_path: Path, story_path: Path) -> Path:
@@ -171,9 +214,9 @@ def build_site_story(config_path: Path, story_path: Path) -> Path:
     relative_url = _story_url(site_root, story_path)
     output_base = config.output / relative_url.parent
     home_url = "../" * len(relative_url.parts)
-    return build_story(
-        find_root(story_path),
-        story_path,
-        output_base,
-        home_url=home_url,
-    )
+    catalog_root = find_root(story_path)
+    output = build_story(catalog_root, story_path, output_base, home_url=home_url)
+    record = _read_build_record(config.output)
+    record[relative_url.as_posix()] = story_fingerprint(catalog_root, story_path, home_url)
+    _write_build_record(config.output, record)
+    return output

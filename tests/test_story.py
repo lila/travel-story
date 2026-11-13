@@ -199,7 +199,7 @@ def test_site_build_creates_index_and_story_directories(tmp_path: Path):
         encoding="utf-8",
     )
 
-    output, count = build_site(root)
+    output, count, _reused = build_site(root)
     assert count == 2
     index = (output / "index.html").read_text()
     assert "Family Travels" in index
@@ -235,7 +235,7 @@ def test_site_uses_catalog_nearest_each_story_and_top_level_output(tmp_path: Pat
     config.write_text('title = "Travels"\nstories = ["trip/chapter.story"]\n')
 
     assert find_site_config(source) == config
-    output, count = build_site(tmp_path, config)
+    output, count, _reused = build_site(tmp_path, config)
     assert count == 1
     assert output == tmp_path / "docs"
     assert (tmp_path / "docs" / "trip" / "chapter" / "index.html").exists()
@@ -270,7 +270,7 @@ def test_site_builds_trips_from_independent_photo_catalogs(tmp_path: Path):
         'title = "Travels"\nstories = [\n' + "\n".join(story_lines) + "\n]\n",
         encoding="utf-8",
     )
-    output, count = build_site(tmp_path)
+    output, count, _reused = build_site(tmp_path)
     assert count == 2
     assert (output / "yellowstone" / "journal" / "images").is_dir()
     assert (output / "san-diego" / "journal" / "images").is_dir()
@@ -396,3 +396,122 @@ def test_single_build_preserves_story_path_within_site(tmp_path: Path, monkeypat
     assert page.exists()
     assert not (source / "docs").exists()
     assert 'href="../../">← All stories</a>' in page.read_text()
+
+
+def _site_with_photos(tmp_path: Path, count: int = 1):
+    """A one-story site whose photos are then made unavailable, as on a second computer."""
+    source = tmp_path / "yellowstone"
+    originals = tmp_path / "originals"
+    source.mkdir()
+    originals.mkdir()
+    for index in range(count):
+        Image.new("RGB", (300, 200), (index * 40, 90, 60)).save(originals / f"photo{index}.jpg")
+    init_project(source)
+    add_photos(source, originals)
+    ids = [row["id"] for row in search_photos(source, "")]
+    story = source / "trip.story"
+    story.write_text(
+        "---\ntitle: Trip\n---\n\nWords.\n\n" + "".join(f"@photo {i}\n\n" for i in ids),
+        encoding="utf-8",
+    )
+    (tmp_path / "site.toml").write_text('title = "Travels"\nstories = ["yellowstone/trip.story"]\n')
+    return source, originals, story, ids
+
+
+def _lose_photos(source: Path, originals: Path) -> None:
+    import shutil
+    shutil.rmtree(originals)
+    shutil.rmtree(source / ".story" / "cache")
+
+
+def test_site_build_reuses_unchanged_story_without_its_photos(tmp_path: Path):
+    source, originals, _story, ids = _site_with_photos(tmp_path)
+    output, built, reused = build_site(tmp_path)
+    assert (built, reused) == (1, 0)
+    assert (output / ".story-build.json").exists()
+
+    _lose_photos(source, originals)
+    output, built, reused = build_site(tmp_path)
+    assert (built, reused) == (0, 1)
+    assert (output / "yellowstone" / "trip" / "images" / f"{ids[0]}.webp").exists()
+    assert 'href="yellowstone/trip/"' in (output / "index.html").read_text()
+
+
+def test_changed_story_falls_back_to_published_images(tmp_path: Path):
+    source, originals, story, ids = _site_with_photos(tmp_path)
+    build_site(tmp_path)
+    _lose_photos(source, originals)
+
+    story.write_text(story.read_text() + "A fixed typo.\n", encoding="utf-8")
+    output, built, reused = build_site(tmp_path)
+    assert (built, reused) == (1, 0)
+    page = output / "yellowstone" / "trip"
+    assert "A fixed typo." in (page / "index.html").read_text()
+    assert (page / "images" / f"{ids[0]}.webp").exists()
+
+
+def test_missing_preview_is_regenerated_from_original(tmp_path: Path):
+    source, _originals, _story, ids = _site_with_photos(tmp_path)
+    preview = source / ".story" / "cache" / "previews" / f"{ids[0]}.webp"
+    preview.unlink()
+    output, built, _reused = build_site(tmp_path)
+    assert built == 1
+    assert preview.exists()
+    assert (output / "yellowstone" / "trip" / "images" / f"{ids[0]}.webp").exists()
+
+
+def test_unavailable_photos_are_reported_together(tmp_path: Path):
+    source, originals, _story, ids = _site_with_photos(tmp_path, count=2)
+    _lose_photos(source, originals)
+    try:
+        build_site(tmp_path)
+    except RuntimeError as error:
+        message = str(error)
+    else:
+        raise AssertionError("build should fail without any image source")
+    assert "2 photo(s)" in message
+    assert all(photo_id in message for photo_id in ids)
+    assert "no readable original on this machine" in message
+    assert not (tmp_path / "docs").exists()
+
+
+def test_single_build_falls_back_to_published_images(tmp_path: Path, monkeypatch):
+    source, originals, story, _ids = _site_with_photos(tmp_path)
+    build_site(tmp_path)
+    page = tmp_path / "docs" / "yellowstone" / "trip" / "index.html"
+    before = page.read_text()
+    _lose_photos(source, originals)
+    story.write_text(story.read_text() + "@photo 0000000000\n", encoding="utf-8")
+    monkeypatch.chdir(source)
+    # The unknown ID renders as a placeholder; existing images come from the published copy.
+    assert run_cli(cli_parser().parse_args(["build", "trip.story"])) == 0
+    assert page.read_text() != before
+    assert "Unknown photo: 0000000000" in page.read_text()
+
+
+def test_single_story_build_updates_build_record(tmp_path: Path, monkeypatch):
+    source, _originals, story, _ids = _site_with_photos(tmp_path)
+    build_site(tmp_path)
+    story.write_text(story.read_text() + "More words.\n", encoding="utf-8")
+    monkeypatch.chdir(source)
+    assert run_cli(cli_parser().parse_args(["build", "trip.story"])) == 0
+    _output, built, reused = build_site(tmp_path)
+    assert (built, reused) == (0, 1)
+
+
+def test_failed_single_build_keeps_previous_output(tmp_path: Path, monkeypatch):
+    source, originals, _story, ids = _site_with_photos(tmp_path, count=2)
+    build_site(tmp_path)
+    story_output = tmp_path / "docs" / "yellowstone" / "trip"
+    (story_output / "images" / f"{ids[1]}.webp").unlink()
+    _lose_photos(source, originals)
+    monkeypatch.chdir(source)
+    try:
+        run_cli(cli_parser().parse_args(["build", "trip.story"]))
+    except RuntimeError as error:
+        assert ids[1] in str(error)
+    else:
+        raise AssertionError("build should fail when a photo has no image source")
+    assert (story_output / "index.html").exists()
+    assert (story_output / "images" / f"{ids[0]}.webp").exists()
+    assert not list(story_output.parent.glob(".trip-*"))

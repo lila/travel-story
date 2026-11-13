@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import hashlib
 import html
+import json
 import re
 import shutil
+import tempfile
 from fractions import Fraction
 from pathlib import Path
 from typing import Any, Callable
@@ -12,8 +15,7 @@ from markdown.extensions import Extension
 from markdown.treeprocessors import Treeprocessor
 
 from .parser import Story
-from .photos import get_photos
-from .project import state_dir
+from .photos import ensure_preview, get_photos
 
 STYLE = """\
 :root { color-scheme: light; --ink:#24231f; --muted:#77736a; --paper:#fbfaf7; --rule:#dedbd2; --focus:#7b4b16; }
@@ -161,31 +163,92 @@ def render_photo_page(
     return f"""<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{html.escape(title)}</title><link rel="stylesheet" href="{html.escape(stylesheet_url)}"></head><body><main class="photo-detail"><a class="back" href="{html.escape(back_url)}">← Back to {html.escape(story_title)}</a><img src="{html.escape(image_url)}" alt="{html.escape(alt)}"><dl class="metadata">{metadata}</dl></main></body></html>"""
 
 
+def story_fingerprint(root: Path, story_path: Path, home_url: str | None = None) -> str:
+    """Hash everything that determines a story's built output.
+
+    Covers the story text, the catalog rows of the photos it uses (not the
+    machine-specific path), map inputs, and the Travel Story source code, so
+    a renderer change rebuilds every story. Content hashes rather than file
+    times keep the result identical across computers and git checkouts.
+    """
+    from .maps import _cache_key
+    from .parser import parse_story
+    story = parse_story(story_path)
+    photos = get_photos(root, story.photo_ids)
+    digest = hashlib.sha256()
+    for module in sorted(Path(__file__).parent.glob("*.py")):
+        digest.update(module.read_bytes())
+    digest.update(story_path.read_bytes())
+    digest.update((home_url or "").encode())
+    for requested_id in story.photo_ids:
+        row = photos.get(requested_id)
+        fields = None if row is None else {
+            key: row[key] for key in row.keys() if key not in ("path", "imported_at")
+        }
+        digest.update(json.dumps([requested_id, fields], sort_keys=True, default=str).encode())
+    for node in story.nodes:
+        if node.kind == "map":
+            digest.update(_cache_key(node, story_path).encode())
+    return digest.hexdigest()
+
+
 def build_story(
     root: Path,
     story_path: Path,
     output_base: Path | None = None,
     home_url: str | None = None,
+    previous: Path | None = None,
 ) -> Path:
-    from .maps import build_map_image
+    """Build one story into ``output_base/<slug>``.
+
+    ``previous`` is the story's earlier published output (defaults to the
+    destination itself). Its images are the last resort when a photo's preview
+    is not cached and its original is not on this machine.
+    """
     from .parser import parse_story
     story = parse_story(story_path)
-    photos = get_photos(root, story.photo_ids)
     slug = story_path.stem
     output = (output_base or root / "docs") / slug
+    if output.exists() and (not output.is_dir() or output.is_symlink()):
+        raise RuntimeError(f"Build destination is not a directory: {output}")
+    output.parent.mkdir(parents=True, exist_ok=True)
+    # Build beside the destination and swap at the end, so a failed build
+    # leaves the previous output (and its images) intact.
+    stage = Path(tempfile.mkdtemp(prefix=f".{slug}-", dir=output.parent))
+    try:
+        _write_story(root, story_path, story, stage, home_url, previous or output)
+        if output.exists():
+            shutil.rmtree(output)
+        stage.replace(output)
+    except BaseException:
+        shutil.rmtree(stage, ignore_errors=True)
+        raise
+    return output
+
+
+def _write_story(
+    root: Path,
+    story_path: Path,
+    story: Story,
+    output: Path,
+    home_url: str | None,
+    previous: Path,
+) -> None:
+    from .maps import build_map_image
+    photos = get_photos(root, story.photo_ids)
     images = output / "images"
-    if output.exists():
-        if not output.is_dir() or output.is_symlink():
-            raise RuntimeError(f"Build destination is not a directory: {output}")
-        shutil.rmtree(output)
     images.mkdir(parents=True, exist_ok=True)
+    missing: dict[str, Any] = {}
 
     def copy_image(photo: Any) -> str:
         name = f"{photo['id']}.webp"
-        cached = state_dir(root) / "cache" / "previews" / name
-        if not cached.exists():
-            raise RuntimeError(f"No renderable preview for photo {photo['id']} ({photo['path']})")
-        shutil.copy2(cached, images / name)
+        source = ensure_preview(root, photo)
+        if source is None and (previous / "images" / name).is_file():
+            source = previous / "images" / name
+        if source is None:
+            missing[photo["id"]] = photo
+        else:
+            shutil.copy2(source, images / name)
         return f"images/{name}"
 
     map_urls: dict[int, str] = {}
@@ -205,6 +268,18 @@ def build_story(
         home_url=home_url,
         map_urls=map_urls,
     )
+    if missing:
+        lines = "\n".join(
+            f"  {photo_id} (imported from {photo['path']})"
+            for photo_id, photo in missing.items()
+        )
+        raise RuntimeError(
+            f"Cannot build {story_path.name}: {len(missing)} photo(s) have no "
+            f"cached preview, no readable original on this machine, and no previously "
+            f"published image:\n{lines}\n"
+            "Build this story on the computer that has the originals, or run "
+            "`story photos rebuild-cache` there and copy .story/cache/previews."
+        )
     (output / "index.html").write_text(page, encoding="utf-8")
     (output / "style.css").write_text(STYLE, encoding="utf-8")
 
@@ -219,4 +294,3 @@ def build_story(
             story.metadata.get("title", "story"),
         )
         (photo_output / "index.html").write_text(detail, encoding="utf-8")
-    return output
